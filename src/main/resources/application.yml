@@ -1,17 +1,43 @@
 server:
   port: 8082
+  # Al recibir SIGTERM (docker service update / scale down) termina las peticiones en curso
+  shutdown: graceful
 
 spring:
   application:
     name: ms-psicologos
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  # Secretos de Docker Swarm montados en /run/secrets: cada archivo es una propiedad
+  # (por ejemplo spring.datasource.password). Si no existen se usan las variables de entorno.
+  config:
+    import: optional:configtree:/run/secrets/
   datasource:
-    url: jdbc:postgresql://localhost:5432/psicologos_db
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:psicologos_db}
     username: ${DB_USERNAME:respirar}
     password: ${DB_PASSWORD:respirar}
+    hikari:
+      # Pool chico: con varias réplicas por servicio, todas comparten la misma instancia RDS
+      maximum-pool-size: ${DB_POOL_SIZE:4}
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: false
+    open-in-view: false
 
-# En AWS: reemplazar por Aurora Serverless (endpoint via Secrets Manager) y variables
-# inyectadas por ECS Task Definition. Ver README de este servicio.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+
+info:
+  servicio: ms-psicologos
+  version: ${APP_VERSION:local}
